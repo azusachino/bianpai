@@ -175,6 +175,22 @@ func (p *Project) UsedNetworks(serviceNames []string) []string {
 	return out
 }
 
+func (p *Project) NeedsServiceDNS(serviceNames []string) bool {
+	networkServices := map[string]int{}
+	for _, service := range serviceNames {
+		for _, network := range p.ServiceNetworks(service) {
+			if network.Name == "default" {
+				continue
+			}
+			networkServices[network.Name]++
+			if networkServices[network.Name] > 1 {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 func (p *Project) UsedNamedVolumes(serviceNames []string) []string {
 	seen := map[string]bool{}
 	var out []string
@@ -204,6 +220,22 @@ func unsupportedWarnings(services map[string]Service) []string {
 		if service.Healthcheck.Kind != 0 && !seen["healthcheck"] {
 			warnings = append(warnings, "service "+name+" uses healthcheck; health state is not waited on")
 			seen["healthcheck"] = true
+		}
+		if service.Restart != "" && !seen["restart"] {
+			warnings = append(warnings, "service "+name+" uses restart; restart policies are not applied")
+			seen["restart"] = true
+		}
+		if service.Privileged && !seen["privileged"] {
+			warnings = append(warnings, "service "+name+" uses privileged; privileged mode is not applied")
+			seen["privileged"] = true
+		}
+		if service.NetworkMode != "" && !seen["network_mode"] {
+			warnings = append(warnings, "service "+name+" uses network_mode; it is ignored (each container gets its own network)")
+			seen["network_mode"] = true
+		}
+		if service.ExtraHosts.Kind != 0 && !seen["extra_hosts"] {
+			warnings = append(warnings, "service "+name+" uses extra_hosts; host entries are not applied")
+			seen["extra_hosts"] = true
 		}
 	}
 	return warnings

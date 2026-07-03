@@ -1,0 +1,62 @@
+name: etcd-cluster
+
+# A 3-node static etcd cluster. Nodes discover each other by service name over
+# the shared network, so this requires Compose service DNS and is rejected by the
+# Apple container backend by default. Env is written out per node rather than via a
+# YAML anchor, because compose merge keys override maps wholesale instead of
+# deep-merging them.
+
+services:
+  etcd1:
+    image: quay.io/coreos/etcd:v3.5.17
+    command:
+      - /usr/local/bin/etcd
+      - --name=etcd1
+      - --listen-peer-urls=http://0.0.0.0:2380
+      - --listen-client-urls=http://0.0.0.0:2379
+      - --initial-advertise-peer-urls=http://etcd1:2380
+      - --advertise-client-urls=http://etcd1:2379
+      - --initial-cluster-token=etcd-cluster
+      - --initial-cluster-state=new
+      - --initial-cluster=etcd1=http://etcd1:2380,etcd2=http://etcd2:2380,etcd3=http://etcd3:2380
+    ports:
+      - "2379:2379"
+    networks:
+      - etcdnet
+
+  etcd2:
+    image: quay.io/coreos/etcd:v3.5.17
+    command:
+      - /usr/local/bin/etcd
+      - --name=etcd2
+      - --listen-peer-urls=http://0.0.0.0:2380
+      - --listen-client-urls=http://0.0.0.0:2379
+      - --initial-advertise-peer-urls=http://etcd2:2380
+      - --advertise-client-urls=http://etcd2:2379
+      - --initial-cluster-token=etcd-cluster
+      - --initial-cluster-state=new
+      - --initial-cluster=etcd1=http://etcd1:2380,etcd2=http://etcd2:2380,etcd3=http://etcd3:2380
+    ports:
+      - "2380:2379"
+    networks:
+      - etcdnet
+
+  etcd3:
+    image: quay.io/coreos/etcd:v3.5.17
+    command:
+      - /usr/local/bin/etcd
+      - --name=etcd3
+      - --listen-peer-urls=http://0.0.0.0:2380
+      - --listen-client-urls=http://0.0.0.0:2379
+      - --initial-advertise-peer-urls=http://etcd3:2380
+      - --advertise-client-urls=http://etcd3:2379
+      - --initial-cluster-token=etcd-cluster
+      - --initial-cluster-state=new
+      - --initial-cluster=etcd1=http://etcd1:2380,etcd2=http://etcd2:2380,etcd3=http://etcd3:2380
+    ports:
+      - "2381:2379"
+    networks:
+      - etcdnet
+
+networks:
+  etcdnet:

@@ -1,0 +1,9 @@
+name: python-host
+
+services:
+  web:
+    image: mirror.gcr.io/library/python:3.12-alpine
+    working_dir: /app
+    command: ["python", "-m", "http.server", "8000", "--bind", "0.0.0.0"]
+    ports:
+      - "8082:8000"

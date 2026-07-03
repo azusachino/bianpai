@@ -1,0 +1,10 @@
+name: caddy-host
+
+services:
+  caddy:
+    image: mirror.gcr.io/library/caddy:2-alpine
+    ports:
+      - "8083:80"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./index.html:/srv/index.html:ro
