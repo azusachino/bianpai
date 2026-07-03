@@ -7,9 +7,22 @@ Bianpai (编排, biānpái, ㄅㄧㄢ ㄆㄞˊ, meaning "compose" in Chinese) is
 ## Backends
 
 - [x] WSLC
-- [ ] Apple container for macOS
+- [x] Apple container for macOS
 - [ ] Docker
 - [ ] nerdctl
+
+Select a backend with `--backend` (default `wslc`):
+
+```sh
+bianpai --backend container up
+```
+
+The Apple `container` backend requires **macOS 26 (Tahoe) on Apple Silicon** for
+multi-service projects — container-to-container networking is unavailable on macOS 15, and
+bianpai warns when it detects this. Some Compose keys have no equivalent yet and are
+reported as warnings rather than applied: `restart`, `privileged`, `network_mode`,
+`extra_hosts`, and healthcheck-gated `depends_on`. See [docs/ROADMAP.md](docs/ROADMAP.md)
+for the full limitation analysis and the staged plan.
 
 ## Features
 
