@@ -1,4 +1,4 @@
-.PHONY: build test test-loop smoke smoke-real vet fmt check validate
+.PHONY: build test test-loop smoke smoke-real vet fmt check validate bizflow
 
 build:
 	go build ./...
@@ -32,3 +32,7 @@ check: build test vet fmt
 # validate is the pre-PR gate.
 validate: check
 	go mod verify
+
+# bizflow runs a full business flow operation sequence on Apple container backend.
+bizflow:
+	scripts/bizflow.sh
