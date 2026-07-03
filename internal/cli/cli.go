@@ -29,7 +29,6 @@ func Run(ctx context.Context, args []string, stdin io.Reader, stdout, stderr io.
 		stdin:  stdin,
 		stdout: stdout,
 		stderr: stderr,
-		be:     backend.NewWSLC(nil),
 	}
 
 	cmd := a.rootCommand(ctx)
@@ -44,6 +43,17 @@ func Run(ctx context.Context, args []string, stdin io.Reader, stdout, stderr io.
 	return 0
 }
 
+func newBackend(name string) (backend.Backend, error) {
+	switch name {
+	case "", "wslc":
+		return backend.NewWSLC(nil), nil
+	case "container":
+		return backend.NewContainer(nil), nil
+	default:
+		return nil, fmt.Errorf("unsupported backend %q", name)
+	}
+}
+
 func (a *app) rootCommand(ctx context.Context) *cobra.Command {
 	root := &cobra.Command{
 		Use:           "bianpai",
@@ -51,10 +61,12 @@ func (a *app) rootCommand(ctx context.Context) *cobra.Command {
 		SilenceUsage:  true,
 		SilenceErrors: true,
 		PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
-			if a.backendName == "" || a.backendName == "wslc" {
-				return nil
+			be, err := newBackend(a.backendName)
+			if err != nil {
+				return err
 			}
-			return fmt.Errorf("unsupported backend %q", a.backendName)
+			a.be = be
+			return nil
 		},
 	}
 	root.PersistentFlags().StringVarP(&a.file, "file", "f", "", "compose file path")
@@ -99,6 +111,9 @@ func (a *app) upCommand(ctx context.Context) *cobra.Command {
 			services, err := project.ServiceNames(args)
 			if err != nil {
 				return err
+			}
+			if c, ok := a.be.(*backend.Container); ok && len(services) > 1 && !c.SupportsNetworks(cmd.Context()) {
+				fmt.Fprintln(a.stderr, "warning: Apple container needs macOS 26 for container-to-container networking; services may not reach each other")
 			}
 			if withBuild {
 				if err := a.buildServices(cmd.Context(), project, services, false, false); err != nil {
