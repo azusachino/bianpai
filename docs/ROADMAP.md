@@ -14,11 +14,18 @@ backend selection, no changes to the compose layer.
 - Project/container/network/volume naming and label-based grouping
   (`com.bianpai.project`, `com.bianpai.service`).
 - WSLC backend (shells out to `wslc`).
+- **Apple `container` backend** (`--backend container`) — Stage 1, see below.
+- Capability warnings for keys a backend can't honor (restart, privileged,
+  `network_mode`, `extra_hosts`, healthcheck, deploy, profiles) plus a macOS-26
+  networking gate.
+- Usecase corpus under [`usecases/`](../usecases) gated by `TestUsecaseStacksLoad`
+  and the `make smoke` end-to-end argv check.
 
-## Stage 1 — Apple `container` backend (this feature request)
+## Stage 1 — Apple `container` backend ✅ shipped
 
-Goal: `bianpai --backend container up` runs a compose project on Apple's `container`
-CLI on macOS, at parity with today's WSLC feature set.
+Goal (partially met): `bianpai --backend container up` runs supported compose projects on
+Apple's `container` CLI on macOS. It is not at WSLC parity because Apple `container` does
+not provide Docker/Podman-style Compose service discovery by default.
 
 ### Command mapping (`container` CLI)
 
@@ -46,11 +53,13 @@ fetch `container list --all --format json`, decode it, keep only rows whose labe
 the project label, then render. This is contained entirely within the backend
 implementation — the `Backend.List(project, ...)` signature is unchanged.
 
-### Apple `container` caveats to surface (warnings, not blockers)
+### Apple `container` caveats to surface
 
-- **Networks require macOS 26+.** On older macOS `network create` is unavailable; detect
-  and warn, fall back to the default per-container networking (each container already gets
-  its own routable IP on `192.168.64.0/24`).
+- **Compose service DNS is not available by default.** Reject multi-service shared-network
+  projects unless explicit Apple local DNS support is configured and implemented.
+- **Network aliases and `hostname:` are unsupported.** Reject them for the Apple backend.
+- **Networks require newer Apple networking support.** On older macOS `network create` is
+  unavailable; fail clearly instead of implying Compose networking works.
 - `--network host` and `--privileged` are unsupported — map compose `network_mode: host`
   and `privileged: true` to a warning; suggest `--cap-add` for specific capabilities.
 - `--restart` is unsupported — `restart:` policies map to a warning.
@@ -114,8 +123,8 @@ multi-service project, on both backends, with today's command set.
 - Backends: `wslc` (exists) + `container` (Apple), selectable via `--backend`.
 - Commands: `up` (detached), `down`, `ps`, `logs`, `build`, `pull`, `exec`, `version`.
 - Compose keys: `image`, `build` (+args/target/dockerfile), `command`, `entrypoint`,
-  `environment`, `env_file`, `ports`, `volumes` (bind + named), `networks` (named + aliases),
-  `labels`, `working_dir`, `user`, `hostname`, `depends_on` (**start ordering only**),
+  `environment`, `env_file`, `ports`, `volumes` (bind + named), `networks` (named only),
+  `labels`, `working_dir`, `user`, `depends_on` (**start ordering only**),
   `mem_limit`, `cpus`, `stdin_open`, `tty`.
 - Project/label grouping; named network + volume create/remove on `up`/`down`.
 - Clear warnings for anything a backend can't honor (host networking, privileged, restart,
@@ -125,9 +134,9 @@ multi-service project, on both backends, with today's command set.
 interpolation, healthcheck-gated `depends_on`, profiles, `restart`, multi-`-f` merge,
 configs/secrets, deploy scheduling.
 
-**Platform target for the `container` backend:** macOS 26 (Tahoe) on Apple Silicon for
-multi-service projects. See the hard-limitation note below — macOS 15 cannot run a
-multi-service compose project at all.
+**Platform target for the `container` backend:** Apple Silicon with Apple `container`.
+Host-published services are supported. Multi-service projects that require Compose
+service DNS are rejected unless explicit Apple local DNS setup is added later.
 
 ## Hard shortages: Apple `container` vs Docker/Podman
 
@@ -135,14 +144,12 @@ These are capability gaps in Apple `container` itself, not in bianpai. bianpai c
 around them but cannot fill them from userspace. Ranked by impact on compose workflows.
 
 1. **Container-to-container networking is the blocker.** `container network create` and
-   inter-container communication require **macOS 26+**; the vmnet APIs don't exist on
-   macOS 15. On **macOS 15 (Sequoia) containers cannot talk to each other at all** — only a
-   single default network exists and the `container network` subcommands are absent. A
-   compose project is multi-service by definition (web → db), so on macOS 15 bianpai's
-   core use case simply does not work. Even on macOS 26, multi-container networking is
-   still maturing: same-bridge traffic isn't bulletproof and DNS can drop after
-   sleep/wake (`container system stop && start` resets it). **This is the single most
-   important constraint to document and gate on.**
+   inter-container communication require newer Apple networking support; the vmnet APIs
+   don't exist on macOS 15. More importantly for Compose, Apple `container` does not
+   provide service-name DNS by default. `container network create` can create a network,
+   but names such as `db`, `api`, or `etcd2` do not resolve unless Apple local DNS has
+   been configured separately. bianpai must reject DNS-dependent stacks by default instead
+   of starting containers that cannot talk to each other.
 
 2. **No healthchecks.** No `--health-cmd`/`--health-interval`, no health state at all.
    `depends_on: condition: service_healthy` cannot be delegated to the CLI; bianpai would
@@ -162,6 +169,11 @@ around them but cannot fill them from userspace. Ranked by impact on compose wor
 6. **`extra_hosts`/`--add-host` is limited.** DNS can be injected via
    `--dns`/`--dns-domain`/`--dns-search`, but arbitrary single hosts-file entries aren't
    supported.
+
+6a. **No `--hostname` / `--network-alias` mapping.** Apple `container run` does not expose
+    Docker-compatible `--hostname` or `--network-alias` flags. Compose `hostname:` and
+    network aliases must be rejected for the Apple backend until a supported replacement is
+    designed.
 
 7. **Anonymous volumes are not garbage-collected.** Unlike Docker, `--rm` does **not**
    remove anonymous volumes (UUID-named); bianpai must track and delete them on `down` or

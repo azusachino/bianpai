@@ -1,0 +1,37 @@
+name: python-valkey-caddy
+
+services:
+  api:
+    image: mirror.gcr.io/library/python:3.12-alpine
+    working_dir: /app
+    command: ["python", "-m", "http.server", "8000"]
+    environment:
+      VALKEY_URL: "valkey://valkey:6379"
+    depends_on:
+      - valkey
+    networks:
+      - appnet
+
+  valkey:
+    image: mirror.gcr.io/valkey/valkey:8-alpine
+    volumes:
+      - valkey-data:/data
+    networks:
+      - appnet
+
+  caddy:
+    image: mirror.gcr.io/library/caddy:2-alpine
+    ports:
+      - "8080:80"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+    depends_on:
+      - api
+    networks:
+      - appnet
+
+volumes:
+  valkey-data:
+
+networks:
+  appnet:

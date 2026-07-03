@@ -195,12 +195,6 @@ func (b *Container) RunArgv(req RunRequest) []string {
 	}
 	for _, network := range req.Networks {
 		argv = append(argv, "--network", network.Name)
-		for _, alias := range network.Aliases {
-			argv = append(argv, "--network-alias", alias)
-		}
-	}
-	if req.Hostname != "" {
-		argv = append(argv, "--hostname", req.Hostname)
 	}
 	if req.Workdir != "" {
 		argv = append(argv, "--workdir", req.Workdir)

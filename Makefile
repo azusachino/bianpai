@@ -1,10 +1,23 @@
-.PHONY: build test vet fmt check validate
+.PHONY: build test test-loop smoke smoke-real vet fmt check validate
 
 build:
 	go build ./...
 
 test:
 	go test ./...
+
+# test-loop reruns the suite to shake out flakes: make test-loop COUNT=20
+test-loop:
+	scripts/test.sh $(COUNT)
+
+# smoke drives up/down/ps against every usecase with a fake `container` CLI.
+smoke: build
+	scripts/smoke.sh
+
+# smoke-real drives each usecase with the real Apple `container` CLI and checks
+# the exposed application endpoints.
+smoke-real: build
+	SMOKE_MODE=real scripts/smoke.sh
 
 vet:
 	go vet ./...

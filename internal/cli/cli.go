@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -89,7 +90,9 @@ func (a *app) versionCommand() *cobra.Command {
 		Use:   "version",
 		Short: "Show backend version information",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return a.be.Check(cmd.Context(), a.stdout, a.stderr)
+			return a.backendCall("check backend version", a.stdout, func(stdout, stderr io.Writer) error {
+				return a.be.Check(cmd.Context(), stdout, stderr)
+			})
 		},
 	}
 }
@@ -112,8 +115,8 @@ func (a *app) upCommand(ctx context.Context) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			if c, ok := a.be.(*backend.Container); ok && len(services) > 1 && !c.SupportsNetworks(cmd.Context()) {
-				fmt.Fprintln(a.stderr, "warning: Apple container needs macOS 26 for container-to-container networking; services may not reach each other")
+			if err := a.validateBackendSupport(project, services); err != nil {
+				return err
 			}
 			if withBuild {
 				if err := a.buildServices(cmd.Context(), project, services, false, false); err != nil {
@@ -122,12 +125,20 @@ func (a *app) upCommand(ctx context.Context) *cobra.Command {
 			}
 			labels := projectLabels(project.Name)
 			for _, network := range project.UsedNetworks(services) {
-				if err := a.be.CreateNetwork(cmd.Context(), project.NetworkName(network), labels, a.stdout, a.stderr); err != nil {
+				name := project.NetworkName(network)
+				err := a.backendCall("create network "+name, a.stdout, func(stdout, stderr io.Writer) error {
+					return a.be.CreateNetwork(cmd.Context(), name, labels, stdout, stderr)
+				})
+				if err != nil && !isAlreadyExistsError(err) {
 					return err
 				}
 			}
 			for _, volume := range project.UsedNamedVolumes(services) {
-				if err := a.be.CreateVolume(cmd.Context(), project.VolumeName(volume), labels, a.stdout, a.stderr); err != nil {
+				name := project.VolumeName(volume)
+				err := a.backendCall("create volume "+name, a.stdout, func(stdout, stderr io.Writer) error {
+					return a.be.CreateVolume(cmd.Context(), name, labels, stdout, stderr)
+				})
+				if err != nil && !isAlreadyExistsError(err) {
 					return err
 				}
 			}
@@ -139,7 +150,9 @@ func (a *app) upCommand(ctx context.Context) *cobra.Command {
 				req.Detach = true
 				_ = a.be.Stop(cmd.Context(), req.Name, io.Discard, io.Discard)
 				_ = a.be.Remove(cmd.Context(), req.Name, io.Discard, io.Discard)
-				if err := a.be.Run(cmd.Context(), req, a.stdout, a.stderr); err != nil {
+				if err := a.backendCall("start service "+service, a.stdout, func(stdout, stderr io.Writer) error {
+					return a.be.Run(cmd.Context(), req, stdout, stderr)
+				}); err != nil {
 					return err
 				}
 			}
@@ -149,6 +162,29 @@ func (a *app) upCommand(ctx context.Context) *cobra.Command {
 	cmd.Flags().BoolVarP(&detach, "detach", "d", false, "run containers in the background")
 	cmd.Flags().BoolVar(&withBuild, "build", false, "build images before starting")
 	return cmd
+}
+
+func (a *app) validateBackendSupport(project *compose.Project, services []string) error {
+	if _, ok := a.be.(*backend.Container); !ok {
+		return nil
+	}
+
+	for _, service := range services {
+		svc := project.Services[service]
+		if svc.Hostname != "" {
+			return fmt.Errorf("Apple container backend does not support hostname for service %q", service)
+		}
+		for _, network := range project.ServiceNetworks(service) {
+			if len(network.Aliases) > 0 {
+				return fmt.Errorf("Apple container backend does not support network aliases for service %q", service)
+			}
+		}
+	}
+
+	if project.NeedsServiceDNS(services) {
+		return errors.New("Apple container backend does not support Compose service DNS by default; configure Apple container DNS support or use host-published addresses")
+	}
+	return nil
 }
 
 func (a *app) downCommand(ctx context.Context) *cobra.Command {
@@ -165,18 +201,30 @@ func (a *app) downCommand(ctx context.Context) *cobra.Command {
 			if err != nil {
 				return err
 			}
+			removed := false
 			for i := len(services) - 1; i >= 0; i-- {
 				name := project.ContainerName(services[i])
-				_ = a.be.Stop(cmd.Context(), name, a.stdout, a.stderr)
-				_ = a.be.Remove(cmd.Context(), name, a.stdout, a.stderr)
+				if a.be.Stop(cmd.Context(), name, io.Discard, io.Discard) == nil {
+					removed = true
+				}
+				if a.be.Remove(cmd.Context(), name, io.Discard, io.Discard) == nil {
+					removed = true
+				}
 			}
 			for _, network := range project.UsedNetworks(services) {
-				_ = a.be.RemoveNetwork(cmd.Context(), project.NetworkName(network), a.stdout, a.stderr)
+				if a.be.RemoveNetwork(cmd.Context(), project.NetworkName(network), io.Discard, io.Discard) == nil {
+					removed = true
+				}
 			}
 			if removeVolumes {
 				for _, volume := range project.UsedNamedVolumes(services) {
-					_ = a.be.RemoveVolume(cmd.Context(), project.VolumeName(volume), a.stdout, a.stderr)
+					if a.be.RemoveVolume(cmd.Context(), project.VolumeName(volume), io.Discard, io.Discard) == nil {
+						removed = true
+					}
 				}
+			}
+			if !removed {
+				fmt.Fprintf(a.stdout, "No services are running for project %s\n", project.Name)
 			}
 			return nil
 		},
@@ -194,7 +242,9 @@ func (a *app) psCommand(ctx context.Context) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			return a.be.List(cmd.Context(), project.Name, a.stdout, a.stderr)
+			return a.backendCall("list project containers", a.stdout, func(stdout, stderr io.Writer) error {
+				return a.be.List(cmd.Context(), project.Name, stdout, stderr)
+			})
 		},
 	}
 }
@@ -214,14 +264,19 @@ func (a *app) logsCommand(ctx context.Context) *cobra.Command {
 				return err
 			}
 			for _, service := range services {
-				if err := a.be.Logs(cmd.Context(), project.ContainerName(service), follow, a.stdout, a.stderr); err != nil {
+				if err := a.backendCall("show logs for service "+service, a.stdout, func(stdout, stderr io.Writer) error {
+					return a.be.Logs(cmd.Context(), project.ContainerName(service), follow, stdout, stderr)
+				}); err != nil {
+					if isNotFoundError(err) {
+						return fmt.Errorf("service %q is not running", service)
+					}
 					return err
 				}
 			}
 			return nil
 		},
 	}
-	cmd.Flags().BoolVarP(&follow, "follow", "f", false, "follow logs")
+	cmd.Flags().BoolVar(&follow, "follow", false, "follow logs")
 	return cmd
 }
 
@@ -266,7 +321,9 @@ func (a *app) pullCommand(ctx context.Context) *cobra.Command {
 				if image == "" {
 					continue
 				}
-				if err := a.be.Pull(cmd.Context(), image, a.stdout, a.stderr); err != nil {
+				if err := a.backendCall("pull image "+image, a.stdout, func(stdout, stderr io.Writer) error {
+					return a.be.Pull(cmd.Context(), image, stdout, stderr)
+				}); err != nil {
 					return err
 				}
 			}
@@ -276,7 +333,7 @@ func (a *app) pullCommand(ctx context.Context) *cobra.Command {
 }
 
 func (a *app) execCommand(ctx context.Context) *cobra.Command {
-	return &cobra.Command{
+	cmd := &cobra.Command{
 		Use:   "exec SERVICE COMMAND...",
 		Short: "Run a command in a service container",
 		Args: func(cmd *cobra.Command, args []string) error {
@@ -294,9 +351,68 @@ func (a *app) execCommand(ctx context.Context) *cobra.Command {
 			if _, ok := project.Services[service]; !ok {
 				return fmt.Errorf("unknown service %q", service)
 			}
-			return a.be.Exec(cmd.Context(), project.ContainerName(service), args[1:], a.stdin, a.stdout, a.stderr)
+			if err := a.backendCall("exec service "+service, a.stdout, func(stdout, stderr io.Writer) error {
+				return a.be.Exec(cmd.Context(), project.ContainerName(service), args[1:], a.stdin, stdout, stderr)
+			}); err != nil {
+				if isNotFoundError(err) {
+					return fmt.Errorf("service %q is not running", service)
+				}
+				return err
+			}
+			return nil
 		},
 	}
+	cmd.Flags().SetInterspersed(false)
+	return cmd
+}
+
+func (a *app) backendCall(action string, stdout io.Writer, call func(stdout, stderr io.Writer) error) error {
+	var stderr bytes.Buffer
+	if stdout == nil {
+		stdout = a.stdout
+	}
+	if err := call(stdout, &stderr); err != nil {
+		return backendError(action, stderr.String(), err)
+	}
+	return nil
+}
+
+func backendError(action, stderr string, err error) error {
+	message := cleanBackendMessage(stderr)
+	if message == "" && err != nil {
+		message = cleanBackendMessage(err.Error())
+	}
+	if message == "" {
+		message = "backend command failed"
+	}
+	return fmt.Errorf("%s failed: %s", action, message)
+}
+
+func cleanBackendMessage(message string) string {
+	message = strings.TrimSpace(message)
+	if message == "" {
+		return ""
+	}
+	lines := strings.Split(message, "\n")
+	message = strings.TrimSpace(lines[len(lines)-1])
+	message = strings.TrimPrefix(message, "Error: ")
+	message = strings.ReplaceAll(message, "internalError: ", "")
+	message = strings.ReplaceAll(message, "internalError", "backend error")
+	message = strings.ReplaceAll(message, "\"", "")
+	return strings.TrimSpace(message)
+}
+
+func isNotFoundError(err error) bool {
+	message := strings.ToLower(err.Error())
+	return strings.Contains(message, "notfound") || strings.Contains(message, "not found")
+}
+
+func isAlreadyExistsError(err error) bool {
+	if err == nil {
+		return false
+	}
+	message := strings.ToLower(err.Error())
+	return strings.Contains(message, "already exists")
 }
 
 func (a *app) loadProject() (*compose.Project, error) {
@@ -335,7 +451,9 @@ func (a *app) buildServices(ctx context.Context, project *compose.Project, servi
 			NoCache:    noCache,
 			Labels:     serviceLabels(project.Name, service),
 		}
-		if err := a.be.Build(ctx, req, a.stdout, a.stderr); err != nil {
+		if err := a.backendCall("build service "+service, a.stdout, func(stdout, stderr io.Writer) error {
+			return a.be.Build(ctx, req, stdout, stderr)
+		}); err != nil {
 			return err
 		}
 	}

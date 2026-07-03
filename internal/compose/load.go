@@ -175,6 +175,22 @@ func (p *Project) UsedNetworks(serviceNames []string) []string {
 	return out
 }
 
+func (p *Project) NeedsServiceDNS(serviceNames []string) bool {
+	networkServices := map[string]int{}
+	for _, service := range serviceNames {
+		for _, network := range p.ServiceNetworks(service) {
+			if network.Name == "default" {
+				continue
+			}
+			networkServices[network.Name]++
+			if networkServices[network.Name] > 1 {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 func (p *Project) UsedNamedVolumes(serviceNames []string) []string {
 	seen := map[string]bool{}
 	var out []string
