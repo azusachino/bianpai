@@ -343,6 +343,10 @@ func (a *app) pullCommand(ctx context.Context) *cobra.Command {
 				return err
 			}
 			for _, service := range services {
+				if project.Services[service].Build != nil {
+					fmt.Fprintf(a.stdout, "Pulling %s Skipping (has build configuration)\n", service)
+					continue
+				}
 				image := project.Services[service].Image
 				if image == "" {
 					continue

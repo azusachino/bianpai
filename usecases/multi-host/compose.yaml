@@ -7,6 +7,8 @@ services:
     command: ["python", "-m", "http.server", "8000", "--bind", "0.0.0.0"]
     ports:
       - "8082:8000"
+    volumes:
+      - ./shared-data:/srv
 
   caddy:
     image: mirror.gcr.io/library/caddy:2-alpine
@@ -14,4 +16,13 @@ services:
       - "8083:80"
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
-      - ./index.html:/srv/index.html:ro
+      - ./shared-data:/srv
+    depends_on:
+      - web
+
+  build-test:
+    build:
+      context: .
+      dockerfile: Containerfile
+    image: local-build-test:latest
+    command: ["sleep", "1000"]
