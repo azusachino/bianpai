@@ -4,8 +4,36 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
 )
+
+func TestUnsupportedFeatureWarnings(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "compose.yaml")
+	data := []byte(`services:
+  app:
+    image: nginx
+    restart: always
+    privileged: true
+    network_mode: host
+    extra_hosts:
+      - "db:10.0.0.1"
+`)
+	if err := os.WriteFile(path, data, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	project, err := Load(path, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	joined := strings.Join(project.Warnings, "\n")
+	for _, want := range []string{"restart", "privileged", "network_mode", "extra_hosts"} {
+		if !strings.Contains(joined, want) {
+			t.Errorf("missing warning for %q in warnings:\n%s", want, joined)
+		}
+	}
+}
 
 func TestLoadComposeSubset(t *testing.T) {
 	dir := t.TempDir()

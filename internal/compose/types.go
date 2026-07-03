@@ -37,6 +37,10 @@ type Service struct {
 	Deploy      yaml.Node    `yaml:"deploy"`
 	Profiles    []string     `yaml:"profiles"`
 	Healthcheck yaml.Node    `yaml:"healthcheck"`
+	Restart     string       `yaml:"restart"`
+	Privileged  bool         `yaml:"privileged"`
+	NetworkMode string       `yaml:"network_mode"`
+	ExtraHosts  yaml.Node    `yaml:"extra_hosts"`
 }
 
 type Network struct {

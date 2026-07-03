@@ -205,6 +205,22 @@ func unsupportedWarnings(services map[string]Service) []string {
 			warnings = append(warnings, "service "+name+" uses healthcheck; health state is not waited on")
 			seen["healthcheck"] = true
 		}
+		if service.Restart != "" && !seen["restart"] {
+			warnings = append(warnings, "service "+name+" uses restart; restart policies are not applied")
+			seen["restart"] = true
+		}
+		if service.Privileged && !seen["privileged"] {
+			warnings = append(warnings, "service "+name+" uses privileged; privileged mode is not applied")
+			seen["privileged"] = true
+		}
+		if service.NetworkMode != "" && !seen["network_mode"] {
+			warnings = append(warnings, "service "+name+" uses network_mode; it is ignored (each container gets its own network)")
+			seen["network_mode"] = true
+		}
+		if service.ExtraHosts.Kind != 0 && !seen["extra_hosts"] {
+			warnings = append(warnings, "service "+name+" uses extra_hosts; host entries are not applied")
+			seen["extra_hosts"] = true
+		}
 	}
 	return warnings
 }
