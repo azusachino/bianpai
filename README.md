@@ -17,13 +17,7 @@ Select a backend with `--backend` (default `wslc`):
 bianpai --backend container up
 ```
 
-The Apple `container` backend supports host-published services and basic lifecycle
-operations, but it does **not** support Compose service-name DNS by default. Multi-service
-projects that require names like `db`, `api`, or `etcd2` to resolve are rejected with a
-clear limitation message until explicit Apple local DNS support is added. Some Compose
-keys have no equivalent yet and are reported as warnings rather than applied: `restart`,
-`privileged`, `network_mode`, `extra_hosts`, and healthcheck-gated `depends_on`. See
-[docs/ROADMAP.md](docs/ROADMAP.md) for the full limitation analysis and the staged plan.
+The Apple `container` backend supports host-published services and basic lifecycle operations, but it does **not** support Compose service-name DNS by default. Multi-service projects that require names like `db`, `api`, or `etcd2` to resolve are rejected with a clear limitation message until explicit Apple local DNS support is added. Some Compose keys have no equivalent yet and are reported as warnings rather than applied: `restart`, `privileged`, `network_mode`, `extra_hosts`, and healthcheck-gated `depends_on`. See [docs/ROADMAP.md](docs/ROADMAP.md) for the full limitation analysis and the staged plan.
 
 ### Apple `container` Isolation & Sharing Details
 

@@ -95,12 +95,13 @@ func (b *Container) RemoveVolume(ctx context.Context, name string, stdout, stder
 
 // SupportsNetworks reports whether the host supports container networks, which
 // gates container-to-container communication. The `container network`
-// subcommands only exist on macOS 26+; on macOS 15 this probe fails.
+// subcommands only exist on macOS 26+; on older macOS versions like macOS 15,
+// this probe will fail.
 func (b *Container) SupportsNetworks(ctx context.Context) bool {
 	return b.runner.Run(ctx, []string{b.binary, "network", "ls"}, nil, io.Discard, io.Discard) == nil
 }
 
-// containerListEntry is the subset of `container list --format json` we read.
+// containerListEntry represents the JSON schema subset returned by `container list --format json`.
 type containerListEntry struct {
 	ID            string `json:"id"`
 	Configuration struct {
@@ -114,8 +115,10 @@ type containerListEntry struct {
 	} `json:"status"`
 }
 
-// List renders project containers. `container list` has no --filter, so we
-// fetch the full JSON list and filter by the bianpai project label ourselves.
+// List renders project containers. Since the Apple `container` CLI does not support
+// server-side filtering via `--filter` (unlike WSLC), we fetch the full list of
+// containers in JSON format, parse it, and perform client-side filtering using
+// the com.bianpai.project label.
 func (b *Container) List(ctx context.Context, project string, stdout, stderr io.Writer) error {
 	var buf bytes.Buffer
 	if err := b.runner.Run(ctx, []string{b.binary, "list", "--all", "--format", "json"}, nil, &buf, stderr); err != nil {
@@ -130,6 +133,7 @@ func (b *Container) List(ctx context.Context, project string, stdout, stderr io.
 	w := tabwriter.NewWriter(stdout, 0, 2, 2, ' ', 0)
 	fmt.Fprintln(w, "NAME\tIMAGE\tSTATE")
 	for _, e := range entries {
+		// Filter out containers that do not belong to the current bianpai project
 		if e.Configuration.Labels[projectLabelKey] != project {
 			continue
 		}
@@ -138,6 +142,7 @@ func (b *Container) List(ctx context.Context, project string, stdout, stderr io.
 	return w.Flush()
 }
 
+// projectLabelKey is the label key used to group resources belonging to the same project.
 const projectLabelKey = "com.bianpai.project"
 
 func (b *Container) BuildArgv(req BuildRequest) []string {
