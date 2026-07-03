@@ -126,20 +126,34 @@ func (a *app) upCommand(ctx context.Context) *cobra.Command {
 			labels := projectLabels(project.Name)
 			for _, network := range project.UsedNetworks(services) {
 				name := project.NetworkName(network)
+				fmt.Fprintf(a.stdout, "Network %s Creating\n", name)
 				err := a.backendCall("create network "+name, a.stdout, func(stdout, stderr io.Writer) error {
 					return a.be.CreateNetwork(cmd.Context(), name, labels, stdout, stderr)
 				})
-				if err != nil && !isAlreadyExistsError(err) {
-					return err
+				if err != nil {
+					if isAlreadyExistsError(err) {
+						fmt.Fprintf(a.stdout, "Network %s Already exists\n", name)
+					} else {
+						return err
+					}
+				} else {
+					fmt.Fprintf(a.stdout, "Network %s Created\n", name)
 				}
 			}
 			for _, volume := range project.UsedNamedVolumes(services) {
 				name := project.VolumeName(volume)
+				fmt.Fprintf(a.stdout, "Volume %s Creating\n", name)
 				err := a.backendCall("create volume "+name, a.stdout, func(stdout, stderr io.Writer) error {
 					return a.be.CreateVolume(cmd.Context(), name, labels, stdout, stderr)
 				})
-				if err != nil && !isAlreadyExistsError(err) {
-					return err
+				if err != nil {
+					if isAlreadyExistsError(err) {
+						fmt.Fprintf(a.stdout, "Volume %s Already exists\n", name)
+					} else {
+						return err
+					}
+				} else {
+					fmt.Fprintf(a.stdout, "Volume %s Created\n", name)
 				}
 			}
 			for _, service := range services {
@@ -148,6 +162,7 @@ func (a *app) upCommand(ctx context.Context) *cobra.Command {
 					return err
 				}
 				req.Detach = true
+				fmt.Fprintf(a.stdout, "Container %s Recreating\n", req.Name)
 				_ = a.be.Stop(cmd.Context(), req.Name, io.Discard, io.Discard)
 				_ = a.be.Remove(cmd.Context(), req.Name, io.Discard, io.Discard)
 				if err := a.backendCall("start service "+service, a.stdout, func(stdout, stderr io.Writer) error {
@@ -155,6 +170,7 @@ func (a *app) upCommand(ctx context.Context) *cobra.Command {
 				}); err != nil {
 					return err
 				}
+				fmt.Fprintf(a.stdout, "Container %s Started\n", req.Name)
 			}
 			return nil
 		},
@@ -201,30 +217,40 @@ func (a *app) downCommand(ctx context.Context) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			removed := false
 			for i := len(services) - 1; i >= 0; i-- {
 				name := project.ContainerName(services[i])
-				if a.be.Stop(cmd.Context(), name, io.Discard, io.Discard) == nil {
-					removed = true
+				fmt.Fprintf(a.stdout, "Stopping container %s ...\n", name)
+				if err := a.be.Stop(cmd.Context(), name, io.Discard, io.Discard); err == nil {
+					fmt.Fprintf(a.stdout, "Stopped\n")
+				} else {
+					fmt.Fprintf(a.stdout, "Not running\n")
 				}
-				if a.be.Remove(cmd.Context(), name, io.Discard, io.Discard) == nil {
-					removed = true
+				fmt.Fprintf(a.stdout, "Removing container %s ...\n", name)
+				if err := a.be.Remove(cmd.Context(), name, io.Discard, io.Discard); err == nil {
+					fmt.Fprintf(a.stdout, "Removed\n")
+				} else {
+					fmt.Fprintf(a.stdout, "Not found\n")
 				}
 			}
 			for _, network := range project.UsedNetworks(services) {
-				if a.be.RemoveNetwork(cmd.Context(), project.NetworkName(network), io.Discard, io.Discard) == nil {
-					removed = true
+				netName := project.NetworkName(network)
+				fmt.Fprintf(a.stdout, "Removing network %s ...\n", netName)
+				if err := a.be.RemoveNetwork(cmd.Context(), netName, io.Discard, io.Discard); err == nil {
+					fmt.Fprintf(a.stdout, "Removed\n")
+				} else {
+					fmt.Fprintf(a.stdout, "Not found\n")
 				}
 			}
 			if removeVolumes {
 				for _, volume := range project.UsedNamedVolumes(services) {
-					if a.be.RemoveVolume(cmd.Context(), project.VolumeName(volume), io.Discard, io.Discard) == nil {
-						removed = true
+					volName := project.VolumeName(volume)
+					fmt.Fprintf(a.stdout, "Removing volume %s ...\n", volName)
+					if err := a.be.RemoveVolume(cmd.Context(), volName, io.Discard, io.Discard); err == nil {
+						fmt.Fprintf(a.stdout, "Removed\n")
+					} else {
+						fmt.Fprintf(a.stdout, "Not found\n")
 					}
 				}
-			}
-			if !removed {
-				fmt.Fprintf(a.stdout, "No services are running for project %s\n", project.Name)
 			}
 			return nil
 		},
@@ -321,11 +347,13 @@ func (a *app) pullCommand(ctx context.Context) *cobra.Command {
 				if image == "" {
 					continue
 				}
+				fmt.Fprintf(a.stdout, "Pulling %s (%s) ...\n", service, image)
 				if err := a.backendCall("pull image "+image, a.stdout, func(stdout, stderr io.Writer) error {
 					return a.be.Pull(cmd.Context(), image, stdout, stderr)
 				}); err != nil {
 					return err
 				}
+				fmt.Fprintf(a.stdout, "Pulled %s\n", service)
 			}
 			return nil
 		},
@@ -430,6 +458,7 @@ func (a *app) buildServices(ctx context.Context, project *compose.Project, servi
 	for _, service := range services {
 		svc := project.Services[service]
 		if svc.Build == nil {
+			fmt.Fprintf(a.stdout, "Building %s Skipping (no build configuration defined)\n", service)
 			continue
 		}
 		contextPath := resolvePath(project.WorkDir, svc.Build.Context)
@@ -451,11 +480,13 @@ func (a *app) buildServices(ctx context.Context, project *compose.Project, servi
 			NoCache:    noCache,
 			Labels:     serviceLabels(project.Name, service),
 		}
+		fmt.Fprintf(a.stdout, "Building %s (%s) ...\n", service, image)
 		if err := a.backendCall("build service "+service, a.stdout, func(stdout, stderr io.Writer) error {
 			return a.be.Build(ctx, req, stdout, stderr)
 		}); err != nil {
 			return err
 		}
+		fmt.Fprintf(a.stdout, "Built %s\n", service)
 	}
 	return nil
 }

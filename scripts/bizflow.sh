@@ -39,6 +39,10 @@ echo "=== [6/8] Executing command inside container (exec) ==="
 "$BIN" --backend container -f "$COMPOSE_FILE" exec web python -c "print('Python VM connection check: OK')"
 
 echo ""
+echo "=== Generating traffic for logs ==="
+curl -s -o /dev/null http://127.0.0.1:8082/ || true
+
+echo ""
 echo "=== [7/8] Fetching container logs (logs) ==="
 "$BIN" --backend container -f "$COMPOSE_FILE" logs web
 

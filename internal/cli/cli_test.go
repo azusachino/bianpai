@@ -56,7 +56,8 @@ func TestDownSuppressesBestEffortCleanupErrors(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if got, want := stdout.String(), "No services are running for project demo\n"; got != want {
+	want := "Stopping container demo_web_1 ...\nNot running\nRemoving container demo_web_1 ...\nNot found\nRemoving network demo_default ...\nNot found\n"
+	if got := stdout.String(); got != want {
 		t.Fatalf("stdout = %q, want %q", got, want)
 	}
 	if stderr.Len() != 0 {
