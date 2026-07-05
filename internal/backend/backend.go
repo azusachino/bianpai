@@ -79,3 +79,11 @@ type NetworkAttachment struct {
 	Name    string
 	Aliases []string
 }
+
+func runCommandArgs(req RunRequest) []string {
+	if len(req.Entrypoint) <= 1 {
+		return append([]string(nil), req.Command...)
+	}
+	args := append([]string(nil), req.Entrypoint[1:]...)
+	return append(args, req.Command...)
+}

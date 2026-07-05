@@ -169,6 +169,6 @@ func (b *WSLC) RunArgv(req RunRequest) []string {
 		argv = append(argv, "--tty")
 	}
 	argv = append(argv, req.Image)
-	argv = append(argv, req.Command...)
+	argv = append(argv, runCommandArgs(req)...)
 	return argv
 }

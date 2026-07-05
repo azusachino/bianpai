@@ -79,6 +79,35 @@ func TestBackendRunContract(t *testing.T) {
 	}
 }
 
+func TestBackendRunContractPreservesEntrypointArgs(t *testing.T) {
+	req := RunRequest{
+		Image:      "alpine:latest",
+		Entrypoint: []string{"sh", "-c"},
+		Command:    []string{"echo hi"},
+	}
+	for name := range backendsUnderTest(nil) {
+		t.Run(name, func(t *testing.T) {
+			r := &captureRunner{}
+			b := backendsUnderTest(r)[name]
+			if err := b.Run(context.Background(), req, io.Discard, io.Discard); err != nil {
+				t.Fatal(err)
+			}
+			argv := r.argv
+			if v := flagValue(argv, "--entrypoint"); v != "sh" {
+				t.Errorf("--entrypoint = %q, want %q", v, "sh")
+			}
+			imgIdx := indexOf(argv, req.Image)
+			if imgIdx < 0 {
+				t.Fatalf("image %q missing from argv: %#v", req.Image, argv)
+			}
+			gotArgs := argv[imgIdx+1:]
+			wantArgs := []string{"-c", "echo hi"}
+			if !equalStrings(gotArgs, wantArgs) {
+				t.Errorf("args after image = %#v, want %#v", gotArgs, wantArgs)
+			}
+		})
+	}
+}
 func indexOf(ss []string, target string) int {
 	for i, s := range ss {
 		if s == target {
