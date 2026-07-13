@@ -12,6 +12,7 @@ import (
 	"testing"
 
 	"github.com/bianpai/bianpai/internal/backend"
+	"github.com/spf13/cobra"
 )
 
 func TestNewBackendSelectsByName(t *testing.T) {
@@ -51,6 +52,134 @@ func TestNewBackendSelectsByName(t *testing.T) {
 
 	if _, err := newBackend("bogus"); err == nil {
 		t.Fatal("expected error for unknown backend")
+	}
+}
+
+func TestRootCommandParsesPersistentFlags(t *testing.T) {
+	a := &app{}
+	cmd := a.rootCommand(context.Background())
+
+	if err := cmd.ParseFlags([]string{
+		"--file", "compose.yaml",
+		"--project-name", "demo",
+		"--backend", "wslc",
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	if a.file != "compose.yaml" || a.projectName != "demo" || a.backendName != "wslc" {
+		t.Fatalf("persistent flags = file %q, project %q, backend %q", a.file, a.projectName, a.backendName)
+	}
+}
+
+func TestCommandOptions(t *testing.T) {
+	buildCompose := writeCompose(t, `name: demo
+services:
+  web:
+    image: nginx:alpine
+    build: .
+`)
+	volumeCompose := writeCompose(t, `name: demo
+services:
+  web:
+    image: nginx:alpine
+    volumes:
+      - data:/data
+volumes:
+  data:
+`)
+
+	tests := []struct {
+		name  string
+		args  []string
+		make  func(*optionRecordingBackend) *cobra.Command
+		check func(*testing.T, *optionRecordingBackend)
+	}{
+		{
+			name: "up build",
+			args: []string{"-d", "--build"},
+			make: func(be *optionRecordingBackend) *cobra.Command {
+				a := testApp(be, buildCompose)
+				return a.upCommand(context.Background())
+			},
+			check: func(t *testing.T, be *optionRecordingBackend) {
+				if len(be.builds) != 1 {
+					t.Fatalf("build calls = %d, want 1", len(be.builds))
+				}
+			},
+		},
+		{
+			name: "down volumes",
+			args: []string{"-v"},
+			make: func(be *optionRecordingBackend) *cobra.Command {
+				a := testApp(be, volumeCompose)
+				return a.downCommand(context.Background())
+			},
+			check: func(t *testing.T, be *optionRecordingBackend) {
+				if len(be.removedVolumes) != 1 || be.removedVolumes[0] != "demo_data" {
+					t.Fatalf("removed volumes = %#v, want [demo_data]", be.removedVolumes)
+				}
+			},
+		},
+		{
+			name: "logs follow",
+			args: []string{"--follow", "web"},
+			make: func(be *optionRecordingBackend) *cobra.Command {
+				a := testApp(be, buildCompose)
+				return a.logsCommand(context.Background())
+			},
+			check: func(t *testing.T, be *optionRecordingBackend) {
+				if len(be.logsFollow) != 1 || !be.logsFollow[0] {
+					t.Fatalf("logs follow = %#v, want [true]", be.logsFollow)
+				}
+			},
+		},
+		{
+			name: "build flags",
+			args: []string{"--no-cache", "--pull", "web"},
+			make: func(be *optionRecordingBackend) *cobra.Command {
+				a := testApp(be, buildCompose)
+				return a.buildCommand(context.Background())
+			},
+			check: func(t *testing.T, be *optionRecordingBackend) {
+				if len(be.builds) != 1 {
+					t.Fatalf("build calls = %d, want 1", len(be.builds))
+				}
+				if !be.builds[0].NoCache || !be.builds[0].Pull {
+					t.Fatalf("build request flags = no-cache:%v pull:%v, want true/true", be.builds[0].NoCache, be.builds[0].Pull)
+				}
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			be := &optionRecordingBackend{}
+			cmd := tt.make(be)
+			cmd.SetArgs(tt.args)
+			if err := cmd.ExecuteContext(context.Background()); err != nil {
+				t.Fatal(err)
+			}
+			tt.check(t, be)
+		})
+	}
+}
+
+func TestExecRequiresServiceAndCommand(t *testing.T) {
+	cmd := testApp(&optionRecordingBackend{}, writeTestCompose(t)).execCommand(context.Background())
+	cmd.SetArgs([]string{"web"})
+	if err := cmd.ExecuteContext(context.Background()); err == nil || err.Error() != "exec requires SERVICE and COMMAND" {
+		t.Fatalf("error = %v, want missing command error", err)
+	}
+}
+
+func testApp(be backend.Backend, composePath string) *app {
+	return &app{
+		stdin:  bytes.NewReader(nil),
+		stdout: io.Discard,
+		stderr: io.Discard,
+		be:     be,
+		file:   composePath,
 	}
 }
 
@@ -239,6 +368,28 @@ func (r *recordingRunner) Run(context.Context, []string, io.Reader, io.Writer, i
 }
 
 type noisyCleanupBackend struct{}
+
+type optionRecordingBackend struct {
+	noisyCleanupBackend
+	builds         []backend.BuildRequest
+	logsFollow     []bool
+	removedVolumes []string
+}
+
+func (b *optionRecordingBackend) Build(_ context.Context, req backend.BuildRequest, _, _ io.Writer) error {
+	b.builds = append(b.builds, req)
+	return nil
+}
+
+func (b *optionRecordingBackend) Logs(_ context.Context, _ string, follow bool, _, _ io.Writer) error {
+	b.logsFollow = append(b.logsFollow, follow)
+	return nil
+}
+
+func (b *optionRecordingBackend) RemoveVolume(_ context.Context, name string, _, _ io.Writer) error {
+	b.removedVolumes = append(b.removedVolumes, name)
+	return nil
+}
 
 func (noisyCleanupBackend) Check(context.Context, io.Writer, io.Writer) error {
 	return nil

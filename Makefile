@@ -1,4 +1,4 @@
-.PHONY: build test test-loop smoke smoke-real vet fmt check validate bizflow
+.PHONY: build test test-loop smoke smoke-real vet fmt race coverage shellcheck quality check validate bizflow
 
 build:
 	go build ./...
@@ -10,7 +10,8 @@ test:
 test-loop:
 	scripts/test.sh $(COUNT)
 
-# smoke drives up/down/ps against every usecase with a fake `container` CLI.
+# smoke drives every user-facing subcommand and all usecases with a fake
+# `container` CLI.
 smoke: build
 	scripts/smoke.sh
 
@@ -21,6 +22,21 @@ smoke-real: build
 
 vet:
 	go vet ./...
+
+# race runs the suite with Go's race detector.
+race:
+	go test -race ./...
+
+# coverage reports statement coverage by package without enforcing a threshold.
+coverage:
+	go test -cover ./...
+
+# shellcheck validates the repository-owned shell scripts used by the checks.
+shellcheck:
+	shellcheck scripts/*.sh
+
+# quality runs the additional checks that are cheap and deterministic in CI.
+quality: race shellcheck
 
 # fmt fails if any file is not gofmt-clean.
 fmt:
