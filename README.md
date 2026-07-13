@@ -51,7 +51,7 @@ make validate     # check + go mod verify (pre-PR gate)
 make quality      # race detector + shellcheck
 make coverage     # report Go statement coverage by package
 make test-loop COUNT=20   # rerun the suite 20x to shake out flakes
-make smoke        # drive every CLI subcommand over every usecase with a fake backend
+make smoke        # drive up/down/ps over every usecase with a fake backend
 make smoke-real   # run Apple container real checks (host-published pass + DNS-limit rejection)
 ```
 
