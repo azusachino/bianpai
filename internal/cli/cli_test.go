@@ -7,6 +7,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -26,10 +27,26 @@ func TestNewBackendSelectsByName(t *testing.T) {
 		t.Fatalf("wslc -> %T, want *backend.WSLC", b)
 	}
 
-	if b, err := newBackend(""); err != nil {
-		t.Fatalf("default: %v", err)
-	} else if _, ok := b.(*backend.WSLC); !ok {
-		t.Fatalf("default -> %T, want *backend.WSLC", b)
+	b, err := newBackend("")
+	switch runtime.GOOS {
+	case "windows":
+		if err != nil {
+			t.Fatalf("default: %v", err)
+		}
+		if _, ok := b.(*backend.WSLC); !ok {
+			t.Fatalf("default -> %T, want *backend.WSLC", b)
+		}
+	case "darwin":
+		if err != nil {
+			t.Fatalf("default: %v", err)
+		}
+		if _, ok := b.(*backend.Container); !ok {
+			t.Fatalf("default -> %T, want *backend.Container", b)
+		}
+	default:
+		if err == nil {
+			t.Fatalf("default -> %T, want error on %s", b, runtime.GOOS)
+		}
 	}
 
 	if _, err := newBackend("bogus"); err == nil {

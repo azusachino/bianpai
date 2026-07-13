@@ -11,7 +11,7 @@ Bianpai (编排, biānpái, ㄅㄧㄢ ㄆㄞˊ, meaning "compose" in Chinese) is
 - [ ] Docker
 - [ ] nerdctl
 
-Select a backend with `--backend` (default `wslc`):
+Select a backend with `--backend`. The default is platform-aware: `wslc` on Windows, `container` on macOS, and no default on other platforms (specify `--backend` explicitly):
 
 ```sh
 bianpai --backend container up

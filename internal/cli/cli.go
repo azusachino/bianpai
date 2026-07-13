@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"path/filepath"
+	"runtime"
 	"strings"
 
 	"github.com/bianpai/bianpai/internal/backend"
@@ -44,12 +45,28 @@ func Run(ctx context.Context, args []string, stdin io.Reader, stdout, stderr io.
 	return 0
 }
 
+func defaultBackendName() string {
+	switch runtime.GOOS {
+	case "windows":
+		return "wslc"
+	case "darwin":
+		return "container"
+	default:
+		return ""
+	}
+}
+
 func newBackend(name string) (backend.Backend, error) {
+	if name == "" {
+		name = defaultBackendName()
+	}
 	switch name {
-	case "", "wslc":
+	case "wslc":
 		return backend.NewWSLC(nil), nil
 	case "container":
 		return backend.NewContainer(nil), nil
+	case "":
+		return nil, fmt.Errorf("no default backend for %s; specify --backend", runtime.GOOS)
 	default:
 		return nil, fmt.Errorf("unsupported backend %q", name)
 	}
@@ -72,7 +89,7 @@ func (a *app) rootCommand(ctx context.Context) *cobra.Command {
 	}
 	root.PersistentFlags().StringVarP(&a.file, "file", "f", "", "compose file path")
 	root.PersistentFlags().StringVarP(&a.projectName, "project-name", "p", "", "project name")
-	root.PersistentFlags().StringVar(&a.backendName, "backend", "wslc", "container backend")
+	root.PersistentFlags().StringVar(&a.backendName, "backend", defaultBackendName(), "container backend (wslc, container)")
 
 	root.AddCommand(a.versionCommand())
 	root.AddCommand(a.upCommand(ctx))
