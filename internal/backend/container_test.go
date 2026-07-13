@@ -180,6 +180,32 @@ const containerListJSON = `[
   {"id":"other_db_1","configuration":{"id":"other_db_1","labels":{"com.bianpai.project":"other","com.bianpai.service":"db"},"image":{"reference":"docker.io/library/postgres:16"}},"status":{"state":"stopped"}}
 ]`
 
+func TestContainerListAcceptsStringStatus(t *testing.T) {
+	r := &captureRunner{stdoutData: `[
+  {"id":"demo_web_1","configuration":{"labels":{"com.bianpai.project":"demo"},"image":{"reference":"nginx:alpine"}},"status":"running"}
+]`}
+
+	var out bytes.Buffer
+	if err := NewContainer(r).List(context.Background(), "demo", &out, io.Discard); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out.String(), "demo_web_1") || !strings.Contains(out.String(), "running") {
+		t.Fatalf("expected string status to render, got:\n%s", out.String())
+	}
+}
+
+func TestContainerListRejectsInvalidStatus(t *testing.T) {
+	r := &captureRunner{stdoutData: `[
+  {"id":"demo_web_1","configuration":{"labels":{"com.bianpai.project":"demo"}},"status":true}
+]`}
+
+	var out bytes.Buffer
+	err := NewContainer(r).List(context.Background(), "demo", &out, io.Discard)
+	if err == nil || !strings.Contains(err.Error(), "parsing container status") {
+		t.Fatalf("expected invalid status error, got %v", err)
+	}
+}
+
 // container list has no --filter, so List must filter by the project label itself.
 func TestContainerListFiltersByProjectLabel(t *testing.T) {
 	r := &captureRunner{stdoutData: containerListJSON}

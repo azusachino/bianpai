@@ -26,12 +26,14 @@ trap cleanup EXIT
 mkdir -p "$stubdir"
 
 if [ "$mode" = "fake" ]; then
-  # Fake `container` CLI: log every invocation, answer `list` with empty JSON so
-  # `ps` can decode, succeed everywhere else.
+  # Fake `container` CLI: log every invocation, answer `list` with the string
+  # status shape emitted by the real CLI, and succeed everywhere else.
   cat >"$stubdir/container" <<EOF
 #!/usr/bin/env bash
 echo "\$*" >> "$log"
-if [ "\${1:-}" = "list" ]; then echo "[]"; fi
+if [ "\${1:-}" = "list" ]; then
+  echo '[{"id":"smoke_web_1","configuration":{"labels":{"com.bianpai.project":"smoke"},"image":{"reference":"smoke"}},"status":"running"}]'
+fi
 exit 0
 EOF
   chmod +x "$stubdir/container"

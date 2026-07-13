@@ -55,8 +55,10 @@ make smoke-real   # run Apple container real checks (host-published pass + DNS-l
 
 `make smoke` (`scripts/smoke.sh`) is an end-to-end functionality check: it builds
 bianpai, drives supported Apple-container stacks through `up`/`down`/`ps` with a stub
-`container` CLI, and asserts DNS-dependent stacks fail with the expected limitation
-message. `make smoke-real` uses the actual Apple `container` CLI: host-published stacks
-must serve traffic, while stacks that require Compose service DNS must fail clearly. The
+`container` CLI, and feeds `ps` a realistic JSON list entry using the string `status`
+shape emitted by Apple container. It also asserts DNS-dependent stacks fail with the
+expected limitation message. `make smoke-real` uses the actual Apple `container` CLI:
+host-published stacks must serve traffic, while stacks that require Compose service DNS
+must fail clearly. The
 unit-level release gate lives in `TestUsecaseStacksLoad`, which asserts every usecase
 parses and loads.

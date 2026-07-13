@@ -110,9 +110,30 @@ type containerListEntry struct {
 			Reference string `json:"reference"`
 		} `json:"image"`
 	} `json:"configuration"`
-	Status struct {
+	Status containerStatus `json:"status"`
+}
+
+// containerStatus accepts both status shapes emitted by versions of Apple's
+// container CLI: a plain state string and an object containing that state.
+type containerStatus struct {
+	State string
+}
+
+func (s *containerStatus) UnmarshalJSON(data []byte) error {
+	var state string
+	if err := json.Unmarshal(data, &state); err == nil {
+		s.State = state
+		return nil
+	}
+
+	var object struct {
 		State string `json:"state"`
-	} `json:"status"`
+	}
+	if err := json.Unmarshal(data, &object); err != nil {
+		return fmt.Errorf("parsing container status: %w", err)
+	}
+	s.State = object.State
+	return nil
 }
 
 // List renders project containers. Since the Apple `container` CLI does not support
