@@ -10,7 +10,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/aisk/bianpai/internal/backend"
+	"github.com/bianpai/bianpai/internal/backend"
 )
 
 func TestNewBackendSelectsByName(t *testing.T) {

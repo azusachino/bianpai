@@ -4,7 +4,7 @@ import (
 	"context"
 	"os"
 
-	"github.com/aisk/bianpai/internal/cli"
+	"github.com/bianpai/bianpai/internal/cli"
 )
 
 func main() {

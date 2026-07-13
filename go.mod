@@ -1,4 +1,4 @@
-module github.com/aisk/bianpai
+module github.com/bianpai/bianpai
 
 go 1.26.4
 

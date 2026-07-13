@@ -9,8 +9,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/aisk/bianpai/internal/backend"
-	"github.com/aisk/bianpai/internal/compose"
+	"github.com/bianpai/bianpai/internal/backend"
+	"github.com/bianpai/bianpai/internal/compose"
 	"github.com/spf13/cobra"
 )
 
