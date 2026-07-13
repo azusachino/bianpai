@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# End-to-end functionality check. By default this builds bianpai and drives
-# `up`/`down`/`ps` against every usecase stack using a fake `container` CLI that
-# records argv. Set SMOKE_MODE=real to use the real Apple `container` CLI and
-# verify each stack's exposed application endpoint.
+# End-to-end functionality check. By default this builds bianpai and drives all
+# user-facing subcommands against usecase stacks using a fake `container` CLI
+# that records argv. Set SMOKE_MODE=real to use the real Apple `container` CLI
+# and verify each stack's exposed application endpoint.
 #
 # Usage: scripts/smoke.sh
 set -euo pipefail
@@ -54,11 +54,26 @@ fi
 
 fail=0
 pass=0
+command_coverage_pass=0
+command_coverage_total=8
 check() { # label, pattern
   if grep -qF -- "$2" "$log"; then
     printf '  ok   %s\n' "$1"; pass=$((pass + 1))
   else
     printf '  FAIL %s (no match: %s)\n' "$1" "$2"; fail=$((fail + 1))
+  fi
+}
+
+check_command() { # label, command...
+  label="$1"
+  shift
+  if "$@" >/dev/null 2>&1; then
+    printf '  ok   %s\n' "$label"
+    pass=$((pass + 1))
+    command_coverage_pass=$((command_coverage_pass + 1))
+  else
+    printf '  FAIL %s\n' "$label"
+    fail=$((fail + 1))
   fi
 }
 
@@ -157,6 +172,17 @@ check_unsupported_service_dns() { # stack-name, compose-file
   fi
 }
 
+# Cover every user-facing subcommand once with the fake backend. The per-stack
+# loop below additionally exercises up/down/ps and capability rejection.
+check_command "version" "$bin" --backend container version
+check_command "up" "$bin" --backend container -f usecases/caddy-host/compose.yaml up -d
+check_command "down" "$bin" --backend container -f usecases/caddy-host/compose.yaml down
+check_command "ps" "$bin" --backend container -f usecases/caddy-host/compose.yaml ps
+check_command "logs" "$bin" --backend container -f usecases/caddy-host/compose.yaml logs caddy
+check_command "build" "$bin" --backend container -f usecases/multi-host/compose.yaml build
+check_command "pull" "$bin" --backend container -f usecases/caddy-host/compose.yaml pull
+check_command "exec" "$bin" --backend container -f usecases/caddy-host/compose.yaml exec caddy sh -c true
+
 for dir in usecases/*/; do
   [ -f "$dir/compose.yaml" ] || continue
   name="$(basename "$dir")"
@@ -242,4 +268,5 @@ done
 
 echo
 echo "smoke: $pass passed, $fail failed"
+echo "command coverage: $command_coverage_pass/$command_coverage_total ($((command_coverage_pass * 100 / command_coverage_total))%)"
 [ "$fail" -eq 0 ]
