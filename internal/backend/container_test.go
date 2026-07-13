@@ -38,7 +38,7 @@ type captureRunner struct {
 func (r *captureRunner) Run(ctx context.Context, argv []string, stdin io.Reader, stdout, stderr io.Writer) error {
 	r.argv = argv
 	if r.stdoutData != "" {
-		io.WriteString(stdout, r.stdoutData)
+		_, _ = io.WriteString(stdout, r.stdoutData)
 	}
 	return r.err
 }
@@ -106,58 +106,58 @@ func TestContainerCommandArgv(t *testing.T) {
 	}{
 		{
 			name: "check",
-			call: func(b *Container, r Runner) { b.Check(ctx, io.Discard, io.Discard) },
+			call: func(b *Container, r Runner) { _ = b.Check(ctx, io.Discard, io.Discard) },
 			want: []string{"container", "--version"},
 		},
 		{
 			name: "pull",
-			call: func(b *Container, r Runner) { b.Pull(ctx, "nginx:alpine", io.Discard, io.Discard) },
+			call: func(b *Container, r Runner) { _ = b.Pull(ctx, "nginx:alpine", io.Discard, io.Discard) },
 			want: []string{"container", "image", "pull", "nginx:alpine"},
 		},
 		{
 			name: "remove",
-			call: func(b *Container, r Runner) { b.Remove(ctx, "demo_web_1", io.Discard, io.Discard) },
+			call: func(b *Container, r Runner) { _ = b.Remove(ctx, "demo_web_1", io.Discard, io.Discard) },
 			want: []string{"container", "delete", "demo_web_1"},
 		},
 		{
 			name: "stop",
-			call: func(b *Container, r Runner) { b.Stop(ctx, "demo_web_1", io.Discard, io.Discard) },
+			call: func(b *Container, r Runner) { _ = b.Stop(ctx, "demo_web_1", io.Discard, io.Discard) },
 			want: []string{"container", "stop", "demo_web_1"},
 		},
 		{
 			name: "create network",
 			call: func(b *Container, r Runner) {
-				b.CreateNetwork(ctx, "demo_default", []string{"com.bianpai.project=demo"}, io.Discard, io.Discard)
+				_ = b.CreateNetwork(ctx, "demo_default", []string{"com.bianpai.project=demo"}, io.Discard, io.Discard)
 			},
 			want: []string{"container", "network", "create", "--label", "com.bianpai.project=demo", "demo_default"},
 		},
 		{
 			name: "remove network",
-			call: func(b *Container, r Runner) { b.RemoveNetwork(ctx, "demo_default", io.Discard, io.Discard) },
+			call: func(b *Container, r Runner) { _ = b.RemoveNetwork(ctx, "demo_default", io.Discard, io.Discard) },
 			want: []string{"container", "network", "delete", "demo_default"},
 		},
 		{
 			name: "create volume",
 			call: func(b *Container, r Runner) {
-				b.CreateVolume(ctx, "demo_data", []string{"com.bianpai.project=demo"}, io.Discard, io.Discard)
+				_ = b.CreateVolume(ctx, "demo_data", []string{"com.bianpai.project=demo"}, io.Discard, io.Discard)
 			},
 			want: []string{"container", "volume", "create", "--label", "com.bianpai.project=demo", "demo_data"},
 		},
 		{
 			name: "remove volume",
-			call: func(b *Container, r Runner) { b.RemoveVolume(ctx, "demo_data", io.Discard, io.Discard) },
+			call: func(b *Container, r Runner) { _ = b.RemoveVolume(ctx, "demo_data", io.Discard, io.Discard) },
 			want: []string{"container", "volume", "delete", "demo_data"},
 		},
 		{
 			name: "exec",
 			call: func(b *Container, r Runner) {
-				b.Exec(ctx, "demo_web_1", []string{"sh", "-c", "echo hi"}, nil, io.Discard, io.Discard)
+				_ = b.Exec(ctx, "demo_web_1", []string{"sh", "-c", "echo hi"}, nil, io.Discard, io.Discard)
 			},
 			want: []string{"container", "exec", "demo_web_1", "sh", "-c", "echo hi"},
 		},
 		{
 			name: "logs follow",
-			call: func(b *Container, r Runner) { b.Logs(ctx, "demo_web_1", true, io.Discard, io.Discard) },
+			call: func(b *Container, r Runner) { _ = b.Logs(ctx, "demo_web_1", true, io.Discard, io.Discard) },
 			want: []string{"container", "logs", "--follow", "demo_web_1"},
 		},
 	}

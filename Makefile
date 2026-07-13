@@ -1,4 +1,4 @@
-.PHONY: build test test-loop smoke smoke-real vet fmt race coverage shellcheck quality check validate bizflow
+.PHONY: build test test-loop smoke smoke-real vet fmt race coverage shellcheck lint-go quality check validate bizflow
 
 build:
 	go build ./...
@@ -35,8 +35,12 @@ coverage:
 shellcheck:
 	shellcheck scripts/*.sh
 
+# lint-go runs the repository's pinned golangci-lint profile.
+lint-go:
+	golangci-lint run
+
 # quality runs the additional checks that are cheap and deterministic in CI.
-quality: race shellcheck
+quality: race shellcheck lint-go
 
 # fmt fails if any file is not gofmt-clean.
 fmt:

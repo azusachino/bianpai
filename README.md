@@ -48,7 +48,7 @@ Because the Apple `container` backend runs **each container inside a separate, d
 ```sh
 make check        # build + test + vet + gofmt (pre-commit gate)
 make validate     # check + go mod verify (pre-PR gate)
-make quality      # race detector + shellcheck
+make quality      # race detector + shellcheck + golangci-lint
 make coverage     # report Go statement coverage by package
 make test-loop COUNT=20   # rerun the suite 20x to shake out flakes
 make smoke        # drive up/down/ps over every usecase with a fake backend

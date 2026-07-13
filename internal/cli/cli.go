@@ -205,17 +205,17 @@ func (a *app) validateBackendSupport(project *compose.Project, services []string
 	for _, service := range services {
 		svc := project.Services[service]
 		if svc.Hostname != "" {
-			return fmt.Errorf("Apple container backend does not support hostname for service %q", service)
+			return fmt.Errorf("apple container backend does not support hostname for service %q", service)
 		}
 		for _, network := range project.ServiceNetworks(service) {
 			if len(network.Aliases) > 0 {
-				return fmt.Errorf("Apple container backend does not support network aliases for service %q", service)
+				return fmt.Errorf("apple container backend does not support network aliases for service %q", service)
 			}
 		}
 	}
 
 	if project.NeedsServiceDNS(services) {
-		return errors.New("Apple container backend does not support Compose service DNS by default; configure Apple container DNS support or use host-published addresses")
+		return errors.New("apple container backend does not support Compose service DNS by default; configure Apple container DNS support or use host-published addresses")
 	}
 	return nil
 }

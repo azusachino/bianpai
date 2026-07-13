@@ -131,13 +131,17 @@ func (b *Container) List(ctx context.Context, project string, stdout, stderr io.
 	}
 
 	w := tabwriter.NewWriter(stdout, 0, 2, 2, ' ', 0)
-	fmt.Fprintln(w, "NAME\tIMAGE\tSTATE")
+	if _, err := fmt.Fprintln(w, "NAME\tIMAGE\tSTATE"); err != nil {
+		return err
+	}
 	for _, e := range entries {
 		// Filter out containers that do not belong to the current bianpai project
 		if e.Configuration.Labels[projectLabelKey] != project {
 			continue
 		}
-		fmt.Fprintf(w, "%s\t%s\t%s\n", e.ID, e.Configuration.Image.Reference, e.Status.State)
+		if _, err := fmt.Fprintf(w, "%s\t%s\t%s\n", e.ID, e.Configuration.Image.Reference, e.Status.State); err != nil {
+			return err
+		}
 	}
 	return w.Flush()
 }
